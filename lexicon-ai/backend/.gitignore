@@ -24,6 +24,10 @@ db.sqlite3
 staticfiles/
 media/
 
+# Django migrations (keep package marker)
+**/migrations/*.py
+!**/migrations/__init__.py
+
 # IDE
 .idea/
 .vscode/
