@@ -1,5 +1,11 @@
+from unittest.mock import patch
+
 from django.db import IntegrityError, connection
+from django.core.files.base import ContentFile
 from django.test import TestCase
+from django.urls import reverse
+from django.core.files.uploadedfile import SimpleUploadedFile
+from rest_framework.test import APIClient
 
 from .models import ChunkEmbedding, Document, DocumentChunk
 
@@ -38,3 +44,40 @@ class DocumentsModelsTest(TestCase):
             cursor.execute("SELECT 1 FROM pg_extension WHERE extname = 'vector'")
             row = cursor.fetchone()
         self.assertIsNotNone(row)
+
+
+class DocumentsIngestionTest(TestCase):
+    def test_chunking_produces_chunks(self):
+        from .services.chunking import chunk_text
+
+        chunks = chunk_text("Para1.\n\nPara2.\n\nPara3.", target_chars=10, overlap_chars=0)
+        self.assertGreaterEqual(len(chunks), 2)
+
+    def test_ingest_persists_non_empty_source_file(self):
+        client = APIClient()
+        pdf_bytes = b"%PDF-1.4\n%fake\n1 0 obj\n<<>>\nendobj\ntrailer\n<<>>\n%%EOF\n"
+        uploaded = SimpleUploadedFile("test.pdf", pdf_bytes, content_type="application/pdf")
+
+        from .models import Document  # import here to avoid patch confusion
+
+        def _create_doc_asserting_file(*, title, source_file):
+            self.assertIsInstance(source_file, ContentFile)
+            self.assertEqual(source_file.size, len(pdf_bytes))
+            self.assertGreater(source_file.size, 0)
+            doc = Document(title=title)
+            doc.save()
+            return doc
+
+        with (
+            patch("documents.views.extract_text_from_pdf_bytes", return_value="hello world\n\nsecond para"),
+            patch("documents.views.Document.objects.create", side_effect=_create_doc_asserting_file),
+        ):
+            resp = client.post(
+                reverse("documents-ingest"),
+                data={"file": uploaded, "title": "T"},
+                format="multipart",
+            )
+
+        self.assertEqual(resp.status_code, 201)
+        payload = resp.json()
+        self.assertGreaterEqual(payload["chunks_created"], 1)
