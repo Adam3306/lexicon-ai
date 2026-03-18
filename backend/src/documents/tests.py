@@ -81,3 +81,48 @@ class DocumentsIngestionTest(TestCase):
         self.assertEqual(resp.status_code, 201)
         payload = resp.json()
         self.assertGreaterEqual(payload["chunks_created"], 1)
+
+
+class SearchTest(TestCase):
+    def test_search_returns_matches(self):
+        client = APIClient()
+        doc = Document.objects.create(title="D")
+        c0 = DocumentChunk.objects.create(document=doc, chunk_index=0, text="hello wise bank")
+        c1 = DocumentChunk.objects.create(document=doc, chunk_index=1, text="something else")
+
+        # Precreate embeddings and fake the OpenAI query embedding.
+        ChunkEmbedding.objects.create(chunk=c0, embedding_model="text-embedding-3-small", embedding=[1.0] + [0.0] * 1535)
+        ChunkEmbedding.objects.create(chunk=c1, embedding_model="text-embedding-3-small", embedding=[0.5] + [0.0] * 1535)
+
+        with patch("documents.views.embed_texts", return_value=[[1.0] + [0.0] * 1535]):
+            resp = client.post(reverse("search"), data={"query": "wise"}, format="json")
+
+        self.assertEqual(resp.status_code, 200)
+        body = resp.json()
+        self.assertGreaterEqual(len(body["results"]), 1)
+        self.assertEqual(body["results"][0]["chunk_id"], str(c0.id))
+
+
+class AnswerTest(TestCase):
+    def test_answer_returns_answer_and_citations(self):
+        client = APIClient()
+        doc = Document.objects.create(title="D")
+        c0 = DocumentChunk.objects.create(document=doc, chunk_index=0, text="Wise supports downloading an account details document.")
+        ChunkEmbedding.objects.create(chunk=c0, embedding_model="text-embedding-3-small", embedding=[1.0] + [0.0] * 1535)
+
+        with (
+            patch("documents.views.embed_texts", return_value=[[1.0] + [0.0] * 1535]),
+            patch("documents.views.generate_grounded_answer", return_value="You can download an account details document from Wise."),
+        ):
+            resp = client.post(
+                reverse("answer"),
+                data={"question": "How do I get account details proof?", "top_k": 1, "document_id": str(doc.id)},
+                format="json",
+            )
+
+        self.assertEqual(resp.status_code, 200)
+        body = resp.json()
+        self.assertIn("answer", body)
+        self.assertIn("citations", body)
+        self.assertEqual(len(body["citations"]), 1)
+        self.assertEqual(body["citations"][0]["chunk_id"], str(c0.id))
