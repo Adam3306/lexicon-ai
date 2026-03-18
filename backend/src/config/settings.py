@@ -43,7 +43,6 @@ INSTALLED_APPS = [
     'django.contrib.staticfiles',
     'pgvector.django',
     'rest_framework',
-    'core',
     'documents',
 ]
 
