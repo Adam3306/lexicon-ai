@@ -102,6 +102,20 @@ class SearchTest(TestCase):
         self.assertGreaterEqual(len(body["results"]), 1)
         self.assertEqual(body["results"][0]["chunk_id"], str(c0.id))
 
+    def test_search_returns_clean_openai_rate_limit_error(self):
+        client = APIClient()
+
+        class FakeRateLimitError(Exception):
+            __module__ = "openai"
+
+        with patch("documents.views.embed_texts", side_effect=FakeRateLimitError("quota exceeded")):
+            resp = client.post(reverse("search"), data={"query": "x"}, format="json")
+
+        self.assertEqual(resp.status_code, 429)
+        body = resp.json()
+        self.assertEqual(body["error"]["type"], "openai_error")
+        self.assertEqual(body["error"]["code"], "FakeRateLimitError")
+
 
 class AnswerTest(TestCase):
     def test_answer_returns_answer_and_citations(self):
@@ -126,3 +140,24 @@ class AnswerTest(TestCase):
         self.assertIn("citations", body)
         self.assertEqual(len(body["citations"]), 1)
         self.assertEqual(body["citations"][0]["chunk_id"], str(c0.id))
+
+    def test_answer_returns_clean_openai_auth_error(self):
+        client = APIClient()
+
+        doc = Document.objects.create(title="D")
+        c0 = DocumentChunk.objects.create(document=doc, chunk_index=0, text="hello")
+        ChunkEmbedding.objects.create(chunk=c0, embedding_model="text-embedding-3-small", embedding=[1.0] + [0.0] * 1535)
+
+        class FakeAuthenticationError(Exception):
+            __module__ = "openai"
+
+        with (
+            patch("documents.views.embed_texts", return_value=[[1.0] + [0.0] * 1535]),
+            patch("documents.views.generate_grounded_answer", side_effect=FakeAuthenticationError("invalid api key")),
+        ):
+            resp = client.post(reverse("answer"), data={"question": "q", "top_k": 1, "document_id": str(doc.id)}, format="json")
+
+        self.assertEqual(resp.status_code, 401)
+        body = resp.json()
+        self.assertEqual(body["error"]["type"], "openai_error")
+        self.assertEqual(body["error"]["code"], "FakeAuthenticationError")

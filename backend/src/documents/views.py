@@ -18,6 +18,7 @@ from .services.chunking import chunk_text
 from .services.embeddings import embed_texts, get_embedding_config
 from .services.extraction import extract_text_from_pdf_bytes
 from .services.generation import generate_grounded_answer, get_chat_config
+from .services.openai_errors import is_openai_exception, openai_exception_response
 
 
 class DocumentIngestView(APIView):
@@ -80,7 +81,12 @@ class EmbedChunksView(APIView):
             return Response({"embedded": 0})
 
         cfg = get_embedding_config()
-        vectors = embed_texts([c.text for c in chunks], model=cfg.model)
+        try:
+            vectors = embed_texts([c.text for c in chunks], model=cfg.model)
+        except Exception as exc:
+            if is_openai_exception(exc):
+                return openai_exception_response(exc)
+            raise
 
         with transaction.atomic():
             created = 0
@@ -111,7 +117,12 @@ class SearchView(APIView):
         document_id = serializer.validated_data.get("document_id")
 
         cfg = get_embedding_config()
-        qvec = embed_texts([query], model=cfg.model)[0]
+        try:
+            qvec = embed_texts([query], model=cfg.model)[0]
+        except Exception as exc:
+            if is_openai_exception(exc):
+                return openai_exception_response(exc)
+            raise
 
         embeddings_qs = ChunkEmbedding.objects.select_related("chunk", "chunk__document")
         if document_id:
@@ -152,7 +163,12 @@ class AnswerView(APIView):
         include_context = serializer.validated_data["include_context"]
 
         emb_cfg = get_embedding_config()
-        qvec = embed_texts([question], model=emb_cfg.model)[0]
+        try:
+            qvec = embed_texts([question], model=emb_cfg.model)[0]
+        except Exception as exc:
+            if is_openai_exception(exc):
+                return openai_exception_response(exc)
+            raise
 
         embeddings_qs = ChunkEmbedding.objects.select_related("chunk", "chunk__document")
         if document_id:
@@ -177,11 +193,16 @@ class AnswerView(APIView):
             context_blocks.append(f"[chunk {h.chunk.chunk_index}]\n{h.chunk.text}")
 
         chat_cfg = get_chat_config()
-        answer = generate_grounded_answer(
-            question=question,
-            context_blocks=context_blocks,
-            model=chat_cfg.model,
-        )
+        try:
+            answer = generate_grounded_answer(
+                question=question,
+                context_blocks=context_blocks,
+                model=chat_cfg.model,
+            )
+        except Exception as exc:
+            if is_openai_exception(exc):
+                return openai_exception_response(exc)
+            raise
 
         resp = {"model": chat_cfg.model, "answer": answer, "citations": citations}
         if include_context:
