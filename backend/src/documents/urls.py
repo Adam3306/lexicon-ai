@@ -1,9 +1,10 @@
 from django.urls import path
 
-from .views import AnswerView, DocumentIngestView, EmbedChunksView, SearchView
+from .views import AnswerView, DocumentIngestView, DocumentListView, EmbedChunksView, SearchView
 
 
 urlpatterns = [
+    path("api/documents", DocumentListView.as_view(), name="documents-list"),
     path("api/documents/ingest", DocumentIngestView.as_view(), name="documents-ingest"),
     path("api/embeddings/embed", EmbedChunksView.as_view(), name="embeddings-embed"),
     path("api/search", SearchView.as_view(), name="search"),

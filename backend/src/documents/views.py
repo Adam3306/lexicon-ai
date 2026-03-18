@@ -12,6 +12,7 @@ from .serializers import (
     AnswerRequestSerializer,
     DocumentEmbedRequestSerializer,
     DocumentIngestSerializer,
+    DocumentListItemSerializer,
     SearchRequestSerializer,
 )
 from .services.chunking import chunk_text
@@ -19,6 +20,21 @@ from .services.embeddings import embed_texts, get_embedding_config
 from .services.extraction import extract_text_from_pdf_bytes
 from .services.generation import generate_grounded_answer, get_chat_config
 from .services.openai_errors import is_openai_exception, openai_exception_response
+
+
+class DocumentListView(APIView):
+    """
+    List uploaded documents for UI selection.
+    """
+
+    def get(self, request):
+        qs = Document.objects.all().order_by("-created_at")
+        items = [
+            {"id": d.id, "title": d.title, "created_at": d.created_at}
+            for d in qs
+        ]
+        ser = DocumentListItemSerializer(items, many=True)
+        return Response({"results": ser.data})
 
 
 class DocumentIngestView(APIView):
@@ -72,9 +88,12 @@ class EmbedChunksView(APIView):
         serializer.is_valid(raise_exception=True)
         limit = serializer.validated_data["limit"]
         document_id = serializer.validated_data.get("document_id")
+        document_ids = serializer.validated_data.get("document_ids")
 
         qs = DocumentChunk.objects.filter(embedding__isnull=True)
-        if document_id:
+        if document_ids:
+            qs = qs.filter(document_id__in=document_ids)
+        elif document_id:
             qs = qs.filter(document_id=document_id)
         chunks = list(qs.order_by("created_at")[:limit])
         if not chunks:
@@ -115,6 +134,7 @@ class SearchView(APIView):
         query = serializer.validated_data["query"]
         top_k = serializer.validated_data["top_k"]
         document_id = serializer.validated_data.get("document_id")
+        document_ids = serializer.validated_data.get("document_ids")
 
         cfg = get_embedding_config()
         try:
@@ -125,7 +145,9 @@ class SearchView(APIView):
             raise
 
         embeddings_qs = ChunkEmbedding.objects.select_related("chunk", "chunk__document")
-        if document_id:
+        if document_ids:
+            embeddings_qs = embeddings_qs.filter(chunk__document_id__in=document_ids)
+        elif document_id:
             embeddings_qs = embeddings_qs.filter(chunk__document_id=document_id)
 
         results = (
@@ -160,6 +182,7 @@ class AnswerView(APIView):
         question = serializer.validated_data["question"]
         top_k = serializer.validated_data["top_k"]
         document_id = serializer.validated_data.get("document_id")
+        document_ids = serializer.validated_data.get("document_ids")
         include_context = serializer.validated_data["include_context"]
 
         emb_cfg = get_embedding_config()
@@ -171,7 +194,9 @@ class AnswerView(APIView):
             raise
 
         embeddings_qs = ChunkEmbedding.objects.select_related("chunk", "chunk__document")
-        if document_id:
+        if document_ids:
+            embeddings_qs = embeddings_qs.filter(chunk__document_id__in=document_ids)
+        elif document_id:
             embeddings_qs = embeddings_qs.filter(chunk__document_id=document_id)
 
         hits = (

@@ -82,6 +82,28 @@ class DocumentsIngestionTest(TestCase):
         payload = resp.json()
         self.assertGreaterEqual(payload["chunks_created"], 1)
 
+    def test_embed_scopes_to_document_ids(self):
+        client = APIClient()
+        doc1 = Document.objects.create(title="D1")
+        doc2 = Document.objects.create(title="D2")
+        c1 = DocumentChunk.objects.create(document=doc1, chunk_index=0, text="one")
+        c2 = DocumentChunk.objects.create(document=doc2, chunk_index=0, text="two")
+
+        vec = [1.0] + [0.0] * 1535
+
+        with (
+            patch("documents.views.embed_texts", return_value=[vec]),
+        ):
+            resp = client.post(
+                reverse("embeddings-embed"),
+                data={"document_ids": [str(doc1.id)], "limit": 10},
+                format="json",
+            )
+
+        self.assertEqual(resp.status_code, 200)
+        self.assertEqual(ChunkEmbedding.objects.filter(chunk=c1).count(), 1)
+        self.assertEqual(ChunkEmbedding.objects.filter(chunk=c2).count(), 0)
+
 
 class SearchTest(TestCase):
     def test_search_returns_matches(self):

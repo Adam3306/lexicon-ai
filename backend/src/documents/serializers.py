@@ -10,19 +10,40 @@ class DocumentIngestSerializer(serializers.Serializer):
 
 class DocumentEmbedRequestSerializer(serializers.Serializer):
     document_id = serializers.UUIDField(required=False)
+    document_ids = serializers.ListField(
+        child=serializers.UUIDField(),
+        required=False,
+        allow_empty=False,
+    )
     limit = serializers.IntegerField(required=False, min_value=1, max_value=500, default=200)
+
+
+class DocumentListItemSerializer(serializers.Serializer):
+    id = serializers.UUIDField()
+    title = serializers.CharField()
+    created_at = serializers.DateTimeField()
 
 
 class SearchRequestSerializer(serializers.Serializer):
     query = serializers.CharField()
     top_k = serializers.IntegerField(required=False, min_value=1, max_value=20, default=5)
     document_id = serializers.UUIDField(required=False)
+    document_ids = serializers.ListField(
+        child=serializers.UUIDField(),
+        required=False,
+        allow_empty=False,
+    )
 
 
 class AnswerRequestSerializer(serializers.Serializer):
     question = serializers.CharField()
     top_k = serializers.IntegerField(required=False, min_value=1, max_value=20, default=5)
     document_id = serializers.UUIDField(required=False)
+    document_ids = serializers.ListField(
+        child=serializers.UUIDField(),
+        required=False,
+        allow_empty=False,
+    )
     include_context = serializers.BooleanField(required=False, default=True)
 
 
