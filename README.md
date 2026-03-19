@@ -8,52 +8,8 @@ Production-shaped MVP for a “knowledge copilot” (RAG) built with:
 
 ## Architecture
 
-```mermaid
-flowchart LR
-  U[User] --> UI[Next.js UI<br/>Upload PDF → Select docs → Search / Answer]
+![Lexicon AI Architecture](docs/architecture.jpeg)
 
-  subgraph API[Django REST API]
-    A1[POST /api/documents/ingest]
-    A2[POST /api/embeddings/embed]
-    A3[POST /api/search]
-    A4[POST /api/answer]
-    EH[OpenAI error mapping<br/>→ clean JSON 4xx/429]
-  end
-
-  subgraph Services[Services]
-    EX[extract_text_from_pdf_bytes<br/> (pypdf)]
-    CH[chunk_text<br/> (paragraph-based chunker)]
-    EM[embed_texts<br/> (OpenAI embeddings)]
-    RET[Vector retrieval<br/> (pgvector cosine distance)]
-    GEN[generate_grounded_answer<br/> (LLM w/ context)]
-  end
-
-  subgraph DB[(Postgres + pgvector)]
-    D[Document]
-    C[DocumentChunk]
-    V[ChunkEmbedding<br/> VectorField]
-  end
-
-  UI --> A1
-  A1 --> EX --> CH --> DB
-  DB --> C --> V
-
-  UI --> A2
-  A2 --> EM --> DB
-
-  UI --> A3
-  A3 --> EM
-  A3 --> RET --> UI
-
-  UI --> A4
-  A4 --> EM
-  A4 --> RET --> GEN --> UI
-
-  A1 -.-> EH
-  A2 -.-> EH
-  A3 -.-> EH
-  A4 -.-> EH
-```
 
 ### Document scoping (important)
 
