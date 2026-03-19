@@ -44,6 +44,7 @@ class DocumentsModelsTest(TestCase):
             cursor.execute("SELECT 1 FROM pg_extension WHERE extname = 'vector'")
             row = cursor.fetchone()
         self.assertIsNotNone(row)
+<<<<<<< HEAD
 
 
 class DocumentsIngestionTest(TestCase):
@@ -183,3 +184,5 @@ class AnswerTest(TestCase):
         body = resp.json()
         self.assertEqual(body["error"]["type"], "openai_error")
         self.assertEqual(body["error"]["code"], "FakeAuthenticationError")
+=======
+>>>>>>> 773e416f207ec9b65242a630ba433a86128b3de1
